@@ -182,9 +182,13 @@ PUBLIC VIRTUAL IMS_BOOL MtcPreconditionManager::IsCheckingResourcesRequiredToAle
     }
 
     const IMS_BOOL bPreconditionSupportedInLocal = IsPreconditionSupportedInLocal();
-    if ((bPreconditionSupportedInLocal && !IsPreconditionSupported(piSession)) &&
-            !m_objContext.GetConfigurationProxy().GetBoolean(
-                    ConfigVoice::KEY_WAIT_QOS_FOR_INCOMING_INVITE_WITHOUT_PRECONDITION_BOOL))
+    const IMS_BOOL bPreconditionNegotiated = IsPreconditionSupported(piSession);
+    const IMS_BOOL bWaitWithoutPrecondition = m_objContext.GetConfigurationProxy().GetBoolean(
+            ConfigVoice::KEY_WAIT_QOS_FOR_INCOMING_INVITE_WITHOUT_PRECONDITION_BOOL);
+    IMS_TRACE_I("Incoming QoS policy: local[%s] negotiated[%s] wait-without-precondition[%s]",
+            _TRACE_B_(bPreconditionSupportedInLocal), _TRACE_B_(bPreconditionNegotiated),
+            _TRACE_B_(bWaitWithoutPrecondition));
+    if (bPreconditionSupportedInLocal && !bPreconditionNegotiated && !bWaitWithoutPrecondition)
     {
         return IMS_FALSE;
     }
@@ -1337,7 +1341,16 @@ IMS_BOOL MtcPreconditionManager::IsNeedToStartWaitAudioDedicatedBearerTimer(
         return IMS_FALSE;
     }
 
-    if (m_objContext.GetCallInfo().IsEmergency() &&
+    const CallInfo& objCallInfo = m_objContext.GetCallInfo();
+    // Keep the setup timer consistent with the policy used to alert an incoming call.
+    if (objCallInfo.ePeerType == PeerType::MT && !objCallInfo.IsEmergency() &&
+            !IsConfirmedDialog(piSession) && !IsCheckingResourcesRequiredToAlertUser(piSession))
+    {
+        IMS_TRACE_I("Skip incoming bearer wait timer: resource checking is not required", 0, 0, 0);
+        return IMS_FALSE;
+    }
+
+    if (objCallInfo.IsEmergency() &&
             m_objContext.GetConfigurationProxy().GetBoolean(
                     ConfigEmergency::KEY_SKIP_AUDIO_DEDICATED_BEARER_WAIT_TIMER_FOR_EMERGENCY_BOOL))
     {

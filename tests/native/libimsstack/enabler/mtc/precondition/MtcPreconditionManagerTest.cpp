@@ -1328,6 +1328,61 @@ TEST_F(MtcPreconditionManagerTest, DoNotStartsQosTimerOnSdpReceivedIfDefaultBear
     pPreconditionManager->OnSdpReceived(&objISession);
 }
 
+TEST_F(MtcPreconditionManagerTest, IncomingSetupTimerRespectsResourceCheckingPolicy)
+{
+    SetUpMockQosInfo();
+    SetUpNothingOnDefaultBearerSupported();
+    SetUpSupportingPreconditionInLocal(CallType::VOIP, IMS_TRUE);
+    pPreconditionManager->SetCurrentRatTypeForPrerequisite(INetworkWatcher::RADIOTECH_TYPE_LTE);
+    ON_CALL(objMediaManager, GetNegotiationState(&objISession))
+            .WillByDefault(Return(NEGO_STATE::STATE_NEGOTIATED));
+    ON_CALL(*pInfo, GetAudioStatus()).WillByDefault(Return(QosStatus::IDLE));
+    ON_CALL(*pConfigurationProxy, GetInt(ConfigVoice::KEY_DEDICATED_BEARER_WAIT_TIMER_MILLIS_INT))
+            .WillByDefault(Return(8000));
+    ON_CALL(*pConfigurationProxy,
+            GetBoolean(ConfigEmergency::KEY_EMERGENCY_QOS_PRECONDITION_SUPPORTED_BOOL))
+            .WillByDefault(Return(IMS_TRUE));
+
+    struct Scenario
+    {
+        PeerType peer;
+        IMS_BOOL precondition;
+        IMS_BOOL waitWithoutPrecondition;
+        IMS_BOOL established;
+        IMS_BOOL emergency;
+        int timerStarts;
+    };
+    const Scenario scenarios[] = {
+            {PeerType::MT, IMS_FALSE, IMS_FALSE, IMS_FALSE, IMS_FALSE, 0},
+            {PeerType::MT, IMS_FALSE, IMS_TRUE, IMS_FALSE, IMS_FALSE, 1},
+            {PeerType::MT, IMS_TRUE, IMS_FALSE, IMS_FALSE, IMS_FALSE, 1},
+            {PeerType::MO, IMS_FALSE, IMS_FALSE, IMS_FALSE, IMS_FALSE, 1},
+            {PeerType::MT, IMS_FALSE, IMS_FALSE, IMS_TRUE, IMS_FALSE, 1},
+            {PeerType::MT, IMS_FALSE, IMS_FALSE, IMS_FALSE, IMS_TRUE, 1},
+    };
+    for (const auto& scenario : scenarios)
+    {
+        objCallInfo.ePeerType = scenario.peer;
+        objCallInfo.eEmergencyType = scenario.emergency
+                ? EmergencyType::EMERGENCY_ROUTING : EmergencyType::NONE;
+        ON_CALL(*pInfo, IsPreconditionSupported()).WillByDefault(Return(scenario.precondition));
+        ON_CALL(objISession, GetState()).WillByDefault(Return(scenario.established
+                        ? ISession::STATE_ESTABLISHED : ISession::STATE_NEGOTIATING));
+        ON_CALL(*pConfigurationProxy,
+                GetBoolean(ConfigVoice::KEY_WAIT_QOS_FOR_INCOMING_INVITE_WITHOUT_PRECONDITION_BOOL))
+                .WillByDefault(Return(scenario.waitWithoutPrecondition));
+
+        EXPECT_CALL(*pInfo, SetAudioStatus(QosStatus::AVAILABLE)).Times(0);
+        EXPECT_CALL(objTimer, StartQosTimer(QosTimerType::WAIT_AUDIO_DEDICATED_BEARER, 8000))
+                .Times(2 * scenario.timerStarts);
+        pPreconditionManager->OnSdpReceived(&objISession);
+        pPreconditionManager->OnSdpSent(&objISession);
+        // Both SDP hooks must apply the same policy; the mock does not latch timer state.
+        ::testing::Mock::VerifyAndClearExpectations(&objTimer);
+        ::testing::Mock::VerifyAndClearExpectations(pInfo);
+    }
+}
+
 TEST_F(MtcPreconditionManagerTest, StartsQosTimerOnSdpReceived)
 {
     SetUpMockQosInfo();
