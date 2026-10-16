@@ -54,10 +54,27 @@ public class CallFeatureTest {
     }
 
     @Test
+    public void testEvsDisabledWithConfiguredPayloads() {
+        PersistableBundle payloadTypes = new PersistableBundle();
+        payloadTypes.putIntArray(
+                CarrierConfigManager.ImsVoice.KEY_EVS_PAYLOAD_TYPE_INT_ARRAY, new int[]{127});
+        when(mMockCarrierConfig.getBundle(
+                CarrierConfigManager.ImsVoice.KEY_AUDIO_CODEC_CAPABILITY_PAYLOAD_TYPES_BUNDLE))
+                .thenReturn(payloadTypes);
+        when(mMockCarrierConfig.getBoolean(CarrierConfig.ImsVoice.KEY_AUDIO_EVS_SUPPORT_BOOL))
+                .thenReturn(false);
+
+        assertFalse(CallFeature.isAudioEvsSupported(SLOT_ID));
+    }
+
+    @Test
     public void testCallFeature() {
         int[] intArray = {0, 1};
         int[] emptyArray = new int[0];
         PersistableBundle audioCodecCapaPayloadBundle = Mockito.mock(PersistableBundle.class);
+
+        when(mMockCarrierConfig.getBoolean(CarrierConfig.ImsVoice.KEY_AUDIO_EVS_SUPPORT_BOOL))
+                .thenReturn(true);
 
         when(mMockCarrierConfig.getBundle(
                 CarrierConfigManager.ImsVoice.KEY_AUDIO_CODEC_CAPABILITY_PAYLOAD_TYPES_BUNDLE))

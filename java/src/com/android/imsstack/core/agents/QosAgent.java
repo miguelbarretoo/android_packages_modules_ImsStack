@@ -88,7 +88,7 @@ public class QosAgent {
 
         @Override
         public void onError(final QosCallbackException exception) {
-            ImsLog.d(this, mSlotId, "onError: " + exception.toString());
+            ImsLog.e(this, mSlotId, "QoS callback failed", exception);
         }
 
         @Override

@@ -32,8 +32,13 @@ public final class CallFeature {
     }
 
     public static boolean isAudioEvsSupported(int slotId) {
-        PersistableBundle audioCodecCapaPayloadTypes = getConfigInterface(slotId).getCarrierConfig()
-               .getBundle(CarrierConfigManager.ImsVoice.KEY_AUDIO_CODEC_CAPABILITY_PAYLOAD_TYPES_BUNDLE);
+        CarrierConfig config = getConfigInterface(slotId).getCarrierConfig();
+        if (!config.getBoolean(CarrierConfig.ImsVoice.KEY_AUDIO_EVS_SUPPORT_BOOL)) {
+            return false;
+        }
+
+        PersistableBundle audioCodecCapaPayloadTypes = config.getBundle(
+                CarrierConfigManager.ImsVoice.KEY_AUDIO_CODEC_CAPABILITY_PAYLOAD_TYPES_BUNDLE);
 
         if (audioCodecCapaPayloadTypes != null){
             int[] evsCodecs = audioCodecCapaPayloadTypes
